@@ -276,14 +276,25 @@ function App() {
     reader.onload = (ev) => {
       try {
         const text = ev.target.result;
-        const allLines = text.split(/\r?\n/);
-        // Find header row - first row containing "name" or "bestell"
-        let headerIdx = allLines.findIndex(l => l.toLowerCase().includes("name") || l.toLowerCase().includes("bestell"));
-        if(headerIdx === -1){ alert("Keine Überschriftenzeile gefunden."); return; }
-        const lines = allLines.slice(headerIdx).filter(l=>l.trim());
-        if(lines.length < 2){ alert("CSV leer oder ungültig."); return; }
-        const sep = lines[0].includes(";") ? ";" : ",";
-        const headers = lines[0].split(sep).map(h=>h.replace(/^"|"$/g,"").trim().toLowerCase());
+        // Robust CSV parser handling quoted multiline fields
+        const parseCSV = (str) => {
+          const rows = []; let row = []; let cell = ""; let inQ = false;
+          for(let i=0;i<str.length;i++){
+            const c=str[i], n=str[i+1];
+            if(inQ){ if(c==="\"&&n==="\""){cell+="\"";i++;}else if(c==="\""){inQ=false;}else{cell+=c;} }
+            else if(c==="\""){inQ=true;}
+            else if(c===","||c===";"){row.push(cell.trim());cell="";}
+            else if(c==="\n"||c==="\r"){if(c==="\r"&&n==="\n")i++;row.push(cell.trim());if(row.some(x=>x))rows.push(row);row=[];cell="";}
+            else{cell+=c;}
+          }
+          row.push(cell.trim()); if(row.some(x=>x))rows.push(row);
+          return rows;
+        };
+        const rows = parseCSV(text);
+        // Find header row
+        const headerIdx = rows.findIndex(r=>r.join("").toLowerCase().includes("name")||r.join("").toLowerCase().includes("bestell"));
+        if(headerIdx===-1){alert("Keine Überschriftenzeile gefunden.");return;}
+        const headers = rows[headerIdx].map(h=>h.replace(/^"|"$/g,"").trim().toLowerCase());
         const idx = {
           name:  headers.findIndex(h=>h.includes("name")),
           cat:   headers.findIndex(h=>h.includes("kategorie")||h.includes("cat")),
@@ -293,26 +304,26 @@ function App() {
           img:   headers.findIndex(h=>h.includes("foto")||h.includes("img")||h.includes("bild")),
           nr:    headers.findIndex(h=>h.includes("bestell")),
         };
-        if(idx.name===-1){ alert("Spalte Name nicht gefunden."); return; }
-        const parsed = lines.slice(1).map((line,i) => {
-          const cols = line.split(sep).map(c=>c.replace(/^"|"$/g,"").trim());
-          const nr = idx.nr>=0 ? cols[idx.nr] : "";
+        if(idx.name===-1){alert("Spalte \'Name\' nicht gefunden.");return;}
+        const cleanP = v => v.replace(/[€\s]/g,"").replace(",",".").trim();
+        const parsed = rows.slice(headerIdx+1).map((cols,i)=>{
+          const nr = idx.nr>=0?cols[idx.nr]:"";
+          const name = idx.name>=0?cols[idx.name].replace(/\n/g," ").trim():"";
+          if(!name||!/\w/.test(name))return null;
           return {
-            id: "imp"+Date.now()+i,
-            name:  idx.name>=0  ? cols[idx.name]  : "",
-            cat:   idx.cat>=0   ? cols[idx.cat]   : "",
-            nr:    nr||"",
-            desc:  idx.desc>=0 ? cols[idx.desc] : "",
-            uvp:   idx.uvp>=0   ? cols[idx.uvp].replace(",",".")   : "",
-            preis: idx.preis>=0 ? cols[idx.preis].replace(",",".") : "",
-            img:   idx.img>=0   ? cols[idx.img]   : "",
+            id:"imp"+Date.now()+i, name, nr:nr||"",
+            cat:   idx.cat>=0?cols[idx.cat]:"",
+            desc:  idx.desc>=0?cols[idx.desc]:"",
+            uvp:   idx.uvp>=0?cleanP(cols[idx.uvp]):"",
+            preis: idx.preis>=0?cleanP(cols[idx.preis]):"",
+            img:   idx.img>=0?cols[idx.img]:"",
           };
-        }).filter(p=>p.name);
-        if(!parsed.length){ alert("Keine Artikel gefunden."); return; }
+        }).filter(Boolean);
+        if(!parsed.length){alert("Keine Artikel gefunden.");return;}
         const mode = window.confirm(parsed.length+" Artikel gefunden.\n\nOK = Ersetzen\nAbbrechen = Hinzufügen");
         if(mode) saveProds(parsed); else saveProds([...prods,...parsed]);
         alert(parsed.length+" Artikel importiert!");
-      } catch(err) { alert("Fehler: "+err.message); }
+      } catch(err){alert("Fehler: "+err.message);}
     };
     reader.readAsText(file,"UTF-8");
     e.target.value="";
