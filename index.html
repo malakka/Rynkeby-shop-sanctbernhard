@@ -106,8 +106,9 @@ const jbFetch = async (key, bin) => {
 const jbSave = async (key, bin, data) => {
   try {
     const r = await fetch(JB+'/'+bin, { method:'PUT', headers:{ 'Content-Type':'application/json','X-Master-Key':key }, body:JSON.stringify(data) });
+    if(!r.ok) console.error('jbSave error:', r.status, await r.text());
     return r.ok;
-  } catch { return false; }
+  } catch(e) { console.error('jbSave exception:', e); return false; }
 };
 
 const IS  = { border:'1px solid #e2e8f0', borderRadius:10, padding:'10px 14px', fontSize:14, outline:'none', width:'100%', background:'#fff', fontFamily:'inherit' };
@@ -191,7 +192,7 @@ function App() {
     if(!jbKey||!jbBin) return;
     setFetch(true);
     const d = await jbFetch(jbKey, jbBin);
-    if(d) setOrdsS(d.filter(o=>o.id&&o.buyer&&Array.isArray(o.items)));
+    if(d) setOrdsS(d.filter(o=>o.id&&o.buyer&&Array.isArray(o.items)&&!o._cleared&&!o._reset&&!o.init));
     setFetch(false);
   };
 
@@ -505,7 +506,7 @@ function App() {
             <div style=${{fontSize:15,fontWeight:800,color:'#991b1b',marginBottom:6}}>⚠ Neue Kampagne starten</div>
             <p style=${{fontSize:13,color:'#b91c1c',marginBottom:14,lineHeight:1.5}}>Löscht alle Bestellungen im Bin. Vorher exportieren!</p>
             <${Btn} col='#dc2626' onClick=${async()=>{if(window.confirm('Wirklich alle Bestellungen löschen?')){
-                const ok = await jbSave(jbKey,jbBin,[]);
+                const ok = await jbSave(jbKey,jbBin,[{"_cleared":true}]);
                 if(ok){ saveOrds([]); alert('Bestellungen wurden in JSONBin gelöscht!'); }
                 else alert('Fehler: JSONBin nicht erreichbar. Bitte API Key prüfen.');
               }}} sx=${{borderRadius:8,padding:'9px 18px',fontSize:13}}>Bestellungen zurücksetzen<//>
