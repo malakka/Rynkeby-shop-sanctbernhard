@@ -89,7 +89,7 @@ const DEFAULT_CONFIG = null;
 
 const gId  = () => Date.now().toString(36) + Math.random().toString(36).slice(2,5);
 const toN  = v => { const n = parseFloat(v); return (isNaN(n)||n===0) ? null : n; };
-const fmtP = v => { const n = toN(v); return n ? n.toFixed(2).replace('.',',') + '\u202f\u20ac' : null; };
+const fmtP = v => { const n = toN(v); return n ? n.toFixed(2).replace('.',',') + ' €' : null; };
 const lsG  = k => { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : null; } catch { return null; } };
 const lsS  = (k,v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} };
 
@@ -126,8 +126,8 @@ function PForm({ p, onChange, onSave, onCancel }) {
     { k:'cat',  l:'Kategorie',            span:1 },
     { k:'desc', l:'Beschreibung',         span:2 },
     { k:'img',  l:'Foto-URL',             span:2 },
-    { k:'uvp',  l:'UVP (\u20ac)',         span:1, t:'number' },
-    { k:'preis',l:'Sammelpreis (\u20ac)', span:1, t:'number' }
+    { k:'uvp',  l:'UVP (€)',         span:1, t:'number' },
+    { k:'preis',l:'Sammelpreis (€)', span:1, t:'number' }
   ];
   return html`<div style=${{ background:'#fef2f2', border:'1px solid #fecaca', borderRadius:12, padding:16, marginBottom:10 }}>
     <div style=${{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:12 }}>
@@ -227,13 +227,13 @@ function App() {
     const rows = orders.flatMap(o=>o.items.map(i=>{
       const pr = prods.find(x=>x.id===i.productId);
       return [new Date(o.ts).toLocaleDateString('de-DE'),o.buyer.name,o.buyer.email,i.name,pr?.nr||'',i.qty,
-        i.preis?i.preis.toFixed(2).replace('.',',')+'\u20ac':'',
-        (i.qty*i.preis).toFixed(2).replace('.',',')+'\u20ac',o.buyer.note||''];
+        i.preis?i.preis.toFixed(2).replace('.',',')+'€':'',
+        (i.qty*i.preis).toFixed(2).replace('.',',')+'€',o.buyer.note||''];
     }));
     try {
       const r = await fetch(gsUrl, { method:'POST', body:JSON.stringify([hdr,...rows]) });
       const t = await r.text();
-      setGsMsg(t==='ok' ? '\u2713 Erfolgreich ins Sheet übertragen!' : 'Fehler: '+t);
+      setGsMsg(t==='ok' ? '✓ Erfolgreich ins Sheet übertragen!' : 'Fehler: '+t);
     } catch(e) { setGsMsg('Fehler: '+e.message); }
     setGsPush(false);
   };
@@ -245,7 +245,7 @@ function App() {
       const cfg = { camp, prods, jbKey, jbBin, gsUrl, adminPwd };
       src = src.replace(
         /\/\* DEFAULT_CONFIG_START \*\/[\s\S]*?\/\* DEFAULT_CONFIG_END \*\//,
-        '/* DEFAULT_CONFIG_START */\nconst DEFAULT_CONFIG = '+JSON.stringify(cfg)+';\n/* DEFAULT_CONFIG_END */'
+        '/* DEFAULT_CONFIG_START */' + String.fromCharCode(10) + 'const DEFAULT_CONFIG = '+JSON.stringify(cfg)+';' + String.fromCharCode(10) + '/* DEFAULT_CONFIG_END */'
       );
       const a = document.createElement('a');
       a.href = URL.createObjectURL(new Blob([src],{type:'text/html;charset=utf-8'}));
@@ -259,10 +259,10 @@ function App() {
     const rows = orders.flatMap(o=>o.items.map(i=>{
       const pr = prods.find(x=>x.id===i.productId);
       return [new Date(o.ts).toLocaleDateString('de-DE'),o.buyer.name,o.buyer.email,i.name,pr?.nr||'',i.qty,
-        i.preis?i.preis.toFixed(2).replace('.',',')+'\u20ac':'',
-        (i.qty*i.preis).toFixed(2).replace('.',',')+'\u20ac',o.buyer.note||''];
+        i.preis?i.preis.toFixed(2).replace('.',',')+'€':'',
+        (i.qty*i.preis).toFixed(2).replace('.',',')+'€',o.buyer.note||''];
     }));
-    const csv = '\uFEFF'+[hdr,...rows].map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(';')).join('\n');
+    const csv = "﻿"+[hdr,...rows].map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(';')).join(String.fromCharCode(10));
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8;'}));
     a.download = 'bestellungen-sanct-bernhard.csv';
@@ -291,8 +291,8 @@ function App() {
               inQ = true;
             } else if(c === ',' || c === ';') {
               row.push(cell.trim()); cell = '';
-            } else if(c === '\n' || c === '\r') {
-              if(c === '\r' && n === '\n') i++;
+            } else if(c.charCodeAt(0) === 10 || c.charCodeAt(0) === 13) {
+              if(c.charCodeAt(0) === 13 && n && n.charCodeAt(0) === 10) i++;
               row.push(cell.trim());
               if(row.some(x => x)) rows.push(row);
               row = []; cell = '';
@@ -321,10 +321,10 @@ function App() {
           nr:    headers.findIndex(h => h.includes('bestell')),
         };
         if(idx.name === -1) { alert('Spalte Name nicht gefunden.'); return; }
-        const cleanP = v => String(v).replace(/[€\s]/g,'').replace(',','.').trim();
+        const cleanP = v => String(v).replace(/[^0-9,.]/g,'').replace(',','.').trim();
         const parsed = rows.slice(hIdx + 1).map((cols, i) => {
           const nr   = idx.nr   >= 0 ? cols[idx.nr]   : '';
-          const name = idx.name >= 0 ? cols[idx.name].replace(/\n/g,' ').trim() : '';
+          const name = idx.name >= 0 ? cols[idx.name].split(String.fromCharCode(10)).join(' ').trim() : '';
           if(!name || !/\w/.test(name)) return null;
           return {
             id: 'imp' + Date.now() + i,
@@ -337,7 +337,7 @@ function App() {
           };
         }).filter(Boolean);
         if(!parsed.length) { alert('Keine Artikel gefunden.'); return; }
-        const replace = window.confirm(parsed.length + ' Artikel gefunden.\n\nOK = Bestehende ersetzen\nAbbrechen = Hinzufügen');
+        const replace = window.confirm(parsed.length + ' Artikel gefunden.' + String.fromCharCode(10,10) + 'OK = Bestehende ersetzen' + String.fromCharCode(10) + 'Abbrechen = Hinzufügen');
         if(replace) saveProds(parsed); else saveProds([...prods, ...parsed]);
         alert(parsed.length + ' Artikel importiert!');
       } catch(err) { alert('Fehler: ' + err.message); }
@@ -572,7 +572,7 @@ function App() {
         <input placeholder='Anmerkungen (optional)' style=${{...IS,marginBottom:subErr?'6px':'10px'}} value=${buyer.note} onChange=${e=>setBuyer(b=>({...b,note:e.target.value}))} />
         ${subErr?html`<p style=${{fontSize:12,color:'#dc2626',marginBottom:8}}>${subErr}</p>`:''}
         <button onClick=${submit} disabled=${!canSub} style=${{background:canSub?'#dc2626':'#f1f5f9',color:canSub?'#fff':'#94a3b8',border:'none',borderRadius:12,padding:'13px 20px',fontSize:15,fontWeight:800,cursor:canSub?'pointer':'not-allowed',width:'100%',transition:'all 0.15s',fontFamily:'inherit'}}>
-          ${sub?'Wird gesendet…':cartQty>0?'Bestellung absenden \u2013 '+cartQty+' Artikel'+(cartTot>0?' \u00b7 '+fmtP(cartTot):''):'Artikel auswählen und Bestellung absenden'}
+          ${sub?'Wird gesendet…':cartQty>0?'Bestellung absenden – '+cartQty+' Artikel'+(cartTot>0?' · '+fmtP(cartTot):''):'Artikel auswählen und Bestellung absenden'}
         </button>
       </div>
     </div>
