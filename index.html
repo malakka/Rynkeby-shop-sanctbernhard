@@ -191,7 +191,7 @@ function App() {
     if(!jbKey||!jbBin) return;
     setFetch(true);
     const d = await jbFetch(jbKey, jbBin);
-    if(d) setOrdsS(d);
+    if(d) setOrdsS(d.filter(o=>!o._reset));
     setFetch(false);
   };
 
@@ -505,7 +505,7 @@ function App() {
             <div style=${{fontSize:15,fontWeight:800,color:'#991b1b',marginBottom:6}}>⚠ Neue Kampagne starten</div>
             <p style=${{fontSize:13,color:'#b91c1c',marginBottom:14,lineHeight:1.5}}>Löscht alle Bestellungen im Bin. Vorher exportieren!</p>
             <${Btn} col='#dc2626' onClick=${async()=>{if(window.confirm('Wirklich alle Bestellungen löschen?')){
-                const ok = await jbSave(jbKey,jbBin,[]);
+                const ok = await jbSave(jbKey,jbBin,[{"_reset":true}]);
                 if(ok){ saveOrds([]); alert('Bestellungen wurden in JSONBin gelöscht!'); }
                 else alert('Fehler: JSONBin nicht erreichbar. Bitte API Key prüfen.');
               }}} sx=${{borderRadius:8,padding:'9px 18px',fontSize:13}}>Bestellungen zurücksetzen<//>
